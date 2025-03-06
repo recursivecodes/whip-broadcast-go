@@ -17,7 +17,6 @@ import (
 	_ "github.com/pion/mediadevices/pkg/driver/camera"
 	_ "github.com/pion/mediadevices/pkg/driver/microphone"
 	"github.com/pion/webrtc/v3"
-	
 )
 
 func main() {
@@ -25,13 +24,64 @@ func main() {
 	videoBitrate := flag.Int("b", 1_000_000, "video bitrate in bits per second")
 	iceServer := flag.String("i", "stun:stun.l.google.com:19302", "ice server")
 	token := flag.String("t", "", "publishing token")
+	microphone := flag.String("m", "", "id of the microphone to use (see --list-microphones)")
+	camera := flag.String("c", "", "id of the camera to use (see --list-cameras)")
 	videoCodec := flag.String("vc", "h264", "video codec vp8|h264")
+	flag.BoolFunc("list-cameras", "list available cameras", func(string) error {
+		fmt.Print("\nAvailable cameras:\n\n")
+		var devices = mediadevices.EnumerateDevices()
+		for _, device := range devices {
+			if(device.DeviceType == "camera" && device.Label != ""){
+				fmt.Println(device.Label)
+			}
+		}
+		os.Exit(0)
+		return nil
+	})
+	flag.BoolFunc("list-microphones", "list available microphones", func(string) error {
+		fmt.Print("\nAvailable microphones:\n\n")
+		var devices = mediadevices.EnumerateDevices()
+		for _, device := range devices {
+			if(device.DeviceType == "microphone" && device.Label != ""){
+				fmt.Println(device.Label)
+			}
+		}
+		os.Exit(0)
+		return nil
+	})
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
 		log.Fatal("Invalid number of arguments, pass the publishing url as the first argument")
 	}
-
+	var cameraId string
+	if *camera != ""{
+		var devices = mediadevices.EnumerateDevices()
+		log.Println(devices)
+		for _, device := range devices {
+			if(*camera == device.Label){
+				cameraId = device.DeviceID
+			}
+		}
+		if(cameraId == ""){
+			log.Fatal("Invalid camera id (use --list-cameras to obtain a valid device)")
+		}
+	}
+	var microphoneId string
+	if *microphone != ""{
+		var devices = mediadevices.EnumerateDevices()
+		for _, device := range devices {
+			if(*microphone == device.Label){
+				microphoneId = device.DeviceID
+			}
+		}
+		if(microphoneId == ""){
+			log.Fatal("Invalid microphone id (use --list-microphones to obtain a valid device)")
+		}
+	}
+	log.Println(microphoneId)
+	
+	// create a new peer connection
 	mediaEngine := webrtc.MediaEngine{}
 	whip := NewWHIPClient(flag.Args()[0], *token)
 
@@ -73,18 +123,38 @@ func main() {
 		if err != nil {
 			log.Fatal("Unexpected error capturing screen. ", err)
 		}
-	}else  { 
+	} else  { 
 		codecSelector := mediadevices.NewCodecSelector(
 			videoCodecSelector,
 			mediadevices.WithAudioEncoders(&opusParams),
 		)
 		codecSelector.Populate(&mediaEngine)
-		stream, err = mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
-			Video: func(constraint *mediadevices.MediaTrackConstraints) {
+		
+		var videoConstraints = func(constraint *mediadevices.MediaTrackConstraints) {
 				constraint.Width = prop.Int(1280)
 				constraint.Height = prop.Int(720)
-			},
-			Audio: func(constraint *mediadevices.MediaTrackConstraints) {},
+			}
+
+		if(cameraId != ""){
+			log.Println("Using camera: ", cameraId)
+			videoConstraints = func(constraint *mediadevices.MediaTrackConstraints) {
+				constraint.DeviceID = prop.String(cameraId)
+				constraint.Width = prop.Int(1280)
+				constraint.Height = prop.Int(720)
+			}
+		} 
+
+		var audioConstraints = func(constraint *mediadevices.MediaTrackConstraints) {}
+		if(microphoneId != ""){
+			log.Println("Using microphone: ", microphoneId)
+			audioConstraints = func(constraint *mediadevices.MediaTrackConstraints) {
+				constraint.DeviceID = prop.String(microphoneId)
+			}
+		}
+
+		stream, err = mediadevices.GetUserMedia(mediadevices.MediaStreamConstraints{
+			Video: videoConstraints,
+			Audio: audioConstraints,
 			Codec: codecSelector,
 		})
 		if err != nil {

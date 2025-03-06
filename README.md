@@ -3,12 +3,30 @@
 whip-broadcast-go is a simple WHIP (https://datatracker.ietf.org/doc/draft-ietf-wish-whip/) client implementation in go using the WebRTC [Pion libraries](https://github.com/pion).
 It includes a WHIPClient class and a simple command line client supporting screensharing to a WHIP ingestion endpoint.
 
-It has been tested with [janus-gateway](https://github.com/meetecho/janus-gateway) with [whip-simple-server](https://github.com/lminiero/simple-whip-server) and also with mediasoup, millicast and cloudflare implementations.
+It has been tested with [Amazon IVS](https://docs.aws.amazon.com/ivs/).
 
 ## Installation
 
 ```
 go build
+```
+
+## List Cameras
+
+```bash
+./whip-broadcast-go --list-cameras
+```
+
+Compare the ID to your local device to find the appropriate camera name
+
+```
+system_profiler SPCameraDataType
+```
+
+## List Microphones
+
+```bash
+./whip-broadcast-go --list-microphones
 ```
 
 ## Running
